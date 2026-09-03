@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Protein</title>
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Protein">
+<meta name="theme-color" content="#EDEAE2">
+
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%232B5875'/%3E%3Ctext x='90' y='122' font-family='Georgia,serif' font-size='96' fill='%23EDEAE2' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="manifest" href='data:application/manifest+json,{"name":"Protein","short_name":"Protein","start_url":"./","display":"standalone","background_color":"%23EDEAE2","theme_color":"%23EDEAE2"}'>
+
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #EDEAE2;
+    color: #201F1B;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    padding: env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 40px);
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .num { font-family: Georgia, "Iowan Old Style", serif; font-weight: 500; }
+  .card { background: #F7F5F0; border-radius: 12px; padding: 20px; margin-bottom: 12px; }
+  .muted { color: #4C5A63; }
+  input, button { font-family: inherit; font-size: 16px; }
+  input[type=text], input[type=number], input[type=password] {
+    border: 1px solid #C9C3B6; border-radius: 8px; padding: 12px 14px;
+    background: #F7F5F0; color: #201F1B; width: 100%;
+  }
+  input:focus { outline: 2px solid #2B5875; outline-offset: 1px; }
+  .btn {
+    background: #2B5875; color: #F7F5F0; border: none; border-radius: 8px;
+    padding: 13px 18px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .btn:disabled { opacity: .5; }
+  .btn-ghost {
+    background: transparent; color: #4C5A63; border: 1px solid #C9C3B6;
+    border-radius: 8px; padding: 11px 14px; font-size: 14px; cursor: pointer;
+  }
+  .row { display: flex; gap: 8px; }
+  .bar { height: 6px; background: #E3DFD3; border-radius: 3px; position: relative; overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 3px; }
+  .entry { display: flex; justify-content: space-between; align-items: center;
+           padding: 11px 0; border-bottom: 1px solid #E3DFD3; gap: 10px; }
+  .linkish { background: none; border: none; color: #4C5A63; font-size: 14px;
+             cursor: pointer; padding: 4px 0; text-align: right; }
+  .del { background: none; border: none; color: #9C7A4A; font-size: 14px; cursor: pointer; }
+  h1 { font-size: 28px; margin: 2px 0 0; font-weight: 400; font-family: Georgia, serif; }
+  label { font-size: 12px; color: #4C5A63; display: block; margin-bottom: 3px; }
+  #week { display: flex; align-items: flex-end; gap: 6px; }
+  #week .col { flex: 1; text-align: center; }
+  #week .slot { height: 70px; display: flex; align-items: flex-end; justify-content: center; }
+  #week .b { width: 60%; background: #C9C3B6; border-radius: 3px 3px 0 0; cursor: pointer; min-height: 4px; }
+  #week .b.on { background: #2B5875; }
+  .err { color: #8A5A3A; font-size: 14px; margin-top: 8px; }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- Setup -->
+<section id="setup" class="hide" style="padding-top:40px">
+  <h1>Protein</h1>
+  <p class="muted" style="font-size:15px;line-height:1.5">
+    Indsæt din Anthropic API-nøgle. Den gemmes kun på denne telefon og bruges til at
+    estimere mad, som den indbyggede database ikke kender.
+  </p>
+  <input type="password" id="keyInput" placeholder="sk-ant-..." autocomplete="off">
+  <div class="row" style="margin-top:10px">
+    <button class="btn" id="saveKey">Gem nøgle</button>
+    <button class="btn-ghost" id="skipKey">Spring over</button>
+  </div>
+  <p class="muted" style="font-size:13px;margin-top:16px">
+    Uden nøgle virker appen stadig — den indbyggede database dækker ca. 100 fødevarer,
+    og resten taster du selv ind.
+  </p>
+</section>
+
+<!-- App -->
+<section id="app" class="hide">
+  <div style="margin:20px 0">
+    <div class="muted" style="font-size:13px" id="dateLabel"></div>
+    <h1>Protein</h1>
+  </div>
+
+  <div class="row" style="margin-bottom:20px">
+    <button class="btn-ghost" id="prevDay">← forrige</button>
+    <button class="btn-ghost hide" id="toToday">i dag</button>
+    <span style="flex:1"></span>
+    <button class="btn-ghost" id="menuBtn">···</button>
+  </div>
+
+  <div id="menu" class="card hide">
+    <div class="row" style="flex-wrap:wrap">
+      <button class="btn-ghost" id="exportCsv">Eksportér CSV</button>
+      <button class="btn-ghost" id="changeKey">Skift API-nøgle</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:baseline;justify-content:space-between">
+      <div><span class="num" id="pTotal" style="font-size:44px">0</span>
+        <span class="muted" style="font-size:15px;margin-left:6px">g protein</span></div>
+      <div class="muted" style="font-size:13px">mål 160–170 g</div>
+    </div>
+    <div class="bar" style="margin-top:12px">
+      <i id="pBar" style="background:#2B5875;width:0%"></i>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between">
+      <div><span class="num" id="kTotal" style="font-size:28px">0</span>
+        <span class="muted" style="font-size:14px;margin-left:6px">kcal</span></div>
+      <div class="muted" style="font-size:12px">interval 2800–3000</div>
+    </div>
+    <div class="bar" style="height:4px;margin-top:10px">
+      <i id="kBar" style="background:#9C7A4A;width:0%"></i>
+    </div>
+  </div>
+
+  <div style="margin-bottom:20px">
+    <div class="row">
+      <input type="text" id="foodInput" placeholder="fx 200g skyr, 3 æg" enterkeyhint="done">
+      <button class="btn" id="addBtn">Tilføj</button>
+    </div>
+    <div id="fallback" class="card hide" style="margin-top:10px">
+      <div id="fbLabel" style="font-size:14px;margin-bottom:10px"></div>
+      <div class="row" style="margin-bottom:10px">
+        <div style="flex:1"><label>protein (g)</label><input type="number" id="fbP" inputmode="numeric"></div>
+        <div style="flex:1"><label>kcal</label><input type="number" id="fbK" inputmode="numeric"></div>
+      </div>
+      <div class="row">
+        <button class="btn" id="fbSave">Gem</button>
+        <button class="btn-ghost" id="fbRetry">Prøv igen</button>
+        <button class="btn-ghost" id="fbCancel">Annullér</button>
+      </div>
+    </div>
+    <div id="error" class="err hide"></div>
+  </div>
+
+  <div id="entries" style="margin-bottom:24px"></div>
+
+  <div style="margin-bottom:24px">
+    <div class="muted" style="font-size:13px;margin-bottom:10px">Sidste 7 dage — protein</div>
+    <div id="week"></div>
+  </div>
+
+  <div style="border-top:1px solid #E3DFD3;padding-top:16px">
+    <div class="muted" style="font-size:13px;margin-bottom:8px" id="weightLabel">Vægt i dag</div>
+    <div class="row">
+      <input type="number" id="weightInput" placeholder="kg" inputmode="decimal" step="0.1">
+      <button class="btn-ghost" id="saveWeight">Log</button>
+    </div>
+  </div>
+</section>
+
+<script>
+const PROTEIN_MIN = 160, PROTEIN_MAX = 170, KCAL_MIN = 2800, KCAL_MAX = 3000;
+const STORE = "protein-log-v1", KEYSTORE = "protein-apikey";
+
+/* ---------- fødevaredatabase (pr. 100 g) ---------- */
+const FOODS = [
+  { k:["skyr"], n:"Skyr", p:11, c:63 },
+  { k:["hytteost","cottage"], n:"Hytteost", p:13, c:79 },
+  { k:["kvark"], n:"Kvark", p:12, c:70 },
+  { k:["ymer"], n:"Ymer", p:5, c:65 },
+  { k:["yoghurt naturel","græsk yoghurt"], n:"Græsk yoghurt", p:9, c:97 },
+  { k:["yoghurt"], n:"Yoghurt", p:4, c:62 },
+  { k:["kyllingebryst","kylling"], n:"Kylling", p:23, c:110 },
+  { k:["kalkun"], n:"Kalkun", p:24, c:110 },
+  { k:["hakket okse","hakkekød","oksekød","okse"], n:"Hakket oksekød", p:20, c:180 },
+  { k:["bøf","steak"], n:"Bøf", p:26, c:220 },
+  { k:["svinemørbrad","mørbrad"], n:"Svinemørbrad", p:21, c:120 },
+  { k:["svinekød","flæsk"], n:"Svinekød", p:20, c:240 },
+  { k:["bacon"], n:"Bacon", p:13, c:400 },
+  { k:["skinke"], n:"Skinke", p:18, c:110 },
+  { k:["pålæg","spegepølse"], n:"Pålæg", p:15, c:250 },
+  { k:["frikadelle"], n:"Frikadeller", p:16, c:230 },
+  { k:["laks"], n:"Laks", p:20, c:200 },
+  { k:["torsk","hvid fisk","sej"], n:"Torsk", p:18, c:82 },
+  { k:["tun"], n:"Tun", p:25, c:110 },
+  { k:["makrel"], n:"Makrel", p:19, c:250 },
+  { k:["sild"], n:"Sild", p:17, c:220 },
+  { k:["fiskefrikadelle","fiskefrikadeller"], n:"Fiskefrikadeller", p:13, c:190 },
+  { k:["rejer"], n:"Rejer", p:20, c:99 },
+  { k:["proteinpulver","whey","valle"], n:"Whey", p:75, c:380 },
+  { k:["kasein"], n:"Kasein", p:75, c:370 },
+  { k:["ost","cheddar","emmentaler"], n:"Ost", p:25, c:350 },
+  { k:["mozzarella"], n:"Mozzarella", p:18, c:250 },
+  { k:["feta"], n:"Feta", p:14, c:265 },
+  { k:["flødeost","philadelphia"], n:"Flødeost", p:6, c:250 },
+  { k:["havregryn","havregrød","oats"], n:"Havregryn", p:13, c:370 },
+  { k:["müsli","musli","granola"], n:"Müsli", p:9, c:400 },
+  { k:["cornflakes"], n:"Cornflakes", p:7, c:380 },
+  { k:["ris","jasminris","basmati"], n:"Ris (kogt)", p:3, c:130 },
+  { k:["pasta","spaghetti","penne"], n:"Pasta (kogt)", p:5, c:160 },
+  { k:["nudler","noodles"], n:"Nudler", p:5, c:150 },
+  { k:["couscous","bulgur"], n:"Couscous", p:4, c:130 },
+  { k:["quinoa"], n:"Quinoa", p:4, c:120 },
+  { k:["kartof","pomfrit","pommes"], n:"Kartofler", p:2, c:85 },
+  { k:["søde kartof"], n:"Søde kartofler", p:2, c:90 },
+  { k:["rugbrød"], n:"Rugbrød", p:6, c:210 },
+  { k:["knækbrød"], n:"Knækbrød", p:10, c:350 },
+  { k:["brød","toast","franskbrød","burgerbolle"], n:"Brød", p:9, c:265 },
+  { k:["tortilla","wrap"], n:"Tortilla", p:8, c:300 },
+  { k:["linser"], n:"Linser (kogt)", p:9, c:116 },
+  { k:["kikærter","hummus"], n:"Kikærter", p:8, c:160 },
+  { k:["bønner"], n:"Bønner", p:8, c:130 },
+  { k:["tofu"], n:"Tofu", p:12, c:120 },
+  { k:["edamame"], n:"Edamame", p:11, c:120 },
+  { k:["peanutbutter","peanut butter","jordnøddesmør"], n:"Peanutbutter", p:25, c:590 },
+  { k:["mandler","cashew","valnød","nødder","peanuts"], n:"Nødder", p:21, c:600 },
+  { k:["chiafrø","hørfrø","frø","solsikkekerner"], n:"Frø", p:18, c:530 },
+  { k:["broccoli","blomkål","spinat","salat","grøntsag","grønt","gulerod","agurk","tomat","peberfrugt","løg","squash","asparges","ærter","majs","champignon","svamp"], n:"Grønt", p:2, c:35 },
+  { k:["banan"], n:"Banan", p:1, c:90 },
+  { k:["æble","pære","appelsin","frugt","bær","jordbær","blåbær","melon","druer","mango","ananas"], n:"Frugt", p:1, c:55 },
+  { k:["rosiner","dadler","tørret frugt"], n:"Tørret frugt", p:2, c:290 },
+  { k:["olivenolie","rapsolie","olie"], n:"Olie", p:0, c:880 },
+  { k:["smør"], n:"Smør", p:1, c:740 },
+  { k:["mayo","remoulade","dressing"], n:"Dressing", p:1, c:600 },
+  { k:["ketchup"], n:"Ketchup", p:1, c:110 },
+  { k:["avocado"], n:"Avocado", p:2, c:160 },
+  { k:["chokolade"], n:"Chokolade", p:7, c:540 },
+  { k:["is ","flødeis"], n:"Is", p:4, c:200 },
+  { k:["kage","småkager","croissant"], n:"Kage", p:5, c:400 },
+  { k:["chips"], n:"Chips", p:6, c:540 },
+  { k:["slik","vingummi"], n:"Slik", p:1, c:350 },
+  { k:["pizza"], n:"Pizza", p:11, c:265 },
+  { k:["burger"], n:"Burger", p:15, c:250 },
+  { k:["sushi"], n:"Sushi", p:8, c:150 },
+  { k:["øl"], n:"Øl", p:0, c:43 },
+  { k:["vin"], n:"Vin", p:0, c:83 },
+  { k:["juice","sodavand","saft"], n:"Juice", p:0, c:45 },
+];
+
+const UNITS = [
+  { k:["æg"], n:"Æg", p:6.3, c:78 },
+  { k:["skiver rugbrød","skive rugbrød"], n:"Rugbrødsskive", p:3, c:70 },
+  { k:["skiver brød","skive brød","skiver toast"], n:"Skive brød", p:2.5, c:75 },
+  { k:["proteinbar"], n:"Proteinbar", p:20, c:200 },
+  { k:["proteinshake","færdigshake"], n:"Proteinshake", p:25, c:150 },
+  { k:["latte","cappuccino"], n:"Latte", p:6, c:90 },
+  { k:["kaffe","americano","espresso","te"], n:"Kaffe", p:0, c:5 },
+  { k:["banan"], n:"Banan", p:1.3, c:105 },
+  { k:["æble"], n:"Æble", p:0.5, c:95 },
+];
+
+const MILK = [
+  { k:["skummetmælk"], n:"Skummetmælk", p:3.5, c:38 },
+  { k:["minimælk"], n:"Minimælk", p:3.5, c:42 },
+  { k:["letmælk"], n:"Letmælk", p:3.5, c:48 },
+  { k:["sødmælk"], n:"Sødmælk", p:3.4, c:63 },
+  { k:["havredrik","havremælk"], n:"Havredrik", p:1, c:45 },
+  { k:["mælk"], n:"Mælk", p:3.5, c:48 },
+];
+
+function localEstimate(raw) {
+  const text = raw.toLowerCase()
+    .replace(/\d+[.,]?\d*\s*%/g, " ")
+    .replace(/(\d),(\d)/g, "$1.$2");
+  const parts = text.split(/\s*(?:,|\bog\b|\+|\bmed\b)\s*/).filter(x => x.trim());
+  let tp = 0, tc = 0, labels = [], ok = true;
+
+  for (const part of parts) {
+    const gm = part.match(/(\d+\.?\d*)\s*(g|gram|kg|dl|ml|l)\b/);
+    const cm = part.match(/(?:^|\s)(\d+\.?\d*)\s*(?:stk|skiver?)?\s/);
+
+    if (!gm) {
+      const u = UNITS.find(f => f.k.some(k => part.includes(k)));
+      if (u) {
+        const n = cm ? parseFloat(cm[1]) : 1;
+        tp += u.p * n; tc += u.c * n;
+        labels.push(n > 1 ? n + " " + u.n.toLowerCase() : u.n);
+        continue;
+      }
+    }
+
+    const hit = MILK.find(f => f.k.some(k => part.includes(k)))
+             || FOODS.find(f => f.k.some(k => part.includes(k)));
+    if (!hit) {
+      if (part.replace(/[^a-zæøå]/g, "").length > 2) ok = false;
+      continue;
+    }
+
+    let g = 100;
+    if (gm) {
+      const v = parseFloat(gm[1]), u = gm[2];
+      g = (u === "kg" || u === "l") ? v * 1000 : (u === "dl" ? v * 100 : v);
+    }
+    tp += hit.p * g / 100; tc += hit.c * g / 100;
+    labels.push(Math.round(g) + " g " + hit.n.toLowerCase());
+  }
+
+  if (!labels.length || !ok) return null;
+  return { protein: Math.round(tp), kcal: Math.round(tc), label: labels.join(", ").slice(0, 60) };
+}
+
+/* ---------- data ---------- */
+const $ = id => document.getElementById(id);
+const iso = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+const today = () => iso(new Date());
+
+let data = { days: {} };
+let selected = today();
+let apiKey = "";
+
+function load() {
+  try { data = JSON.parse(localStorage.getItem(STORE)) || { days: {} }; } catch (e) { data = { days: {} }; }
+  if (!data.days) data.days = {};
+  apiKey = localStorage.getItem(KEYSTORE) || "";
+}
+function save() { localStorage.setItem(STORE, JSON.stringify(data)); }
+function day(k) { if (!data.days[k]) data.days[k] = { entries: [], weight: null }; return data.days[k]; }
+
+/* ---------- API ---------- */
+async function apiEstimate(text) {
+  if (!apiKey) throw new Error("ingen API-nøgle");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 300,
+      messages: [{ role: "user", content:
+        'Estimér protein i gram og kalorier for denne mad. Danske mærker og retter kendes (Cheasy, Arla, Bodylab, smørrebrød osv.).\n' +
+        'Svar udelukkende med ét JSON-objekt, intet andet:\n' +
+        '{"protein": <heltal>, "kcal": <heltal>, "label": "<maks 6 ord, dansk>"}\n\nMad: ' + text }]
+    })
+  });
+  if (!res.ok) {
+    let d = "HTTP " + res.status;
+    try { const b = await res.json(); if (b?.error?.message) d = b.error.message; } catch (e) {}
+    throw new Error(d);
+  }
+  const j = await res.json();
+  const txt = (j.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+  const m = txt.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error("uforståeligt svar");
+  const o = JSON.parse(m[0]);
+  const p = Number(o.protein), c = Number(o.kcal);
+  if (!isFinite(p) || !isFinite(c)) throw new Error("tal kunne ikke læses");
+  return { protein: Math.round(p), kcal: Math.round(c), label: o.label || text.slice(0,40) };
+}
+
+/* ---------- actions ---------- */
+function addEntry(dateKey, e) {
+  day(dateKey).entries.push({
+    id: String(Date.now()) + Math.random().toString(36).slice(2,6),
+    time: new Date().toTimeString().slice(0,5),
+    text: e.label, protein: e.protein, kcal: e.kcal
+  });
+  save(); render();
+}
+
+async function submitFood() {
+  const text = $("foodInput").value.trim();
+  if (!text) return;
+
+  const local = localEstimate(text);
+  if (local) { addEntry(selected, local); $("foodInput").value = ""; hideFallback(); return; }
+
+  $("addBtn").disabled = true; $("addBtn").textContent = "…";
+  let err = null;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const r = await apiEstimate(text);
+      addEntry(selected, r); $("foodInput").value = ""; hideFallback();
+      $("addBtn").disabled = false; $("addBtn").textContent = "Tilføj";
+      return;
+    } catch (e) { err = e; if (i < 2) await new Promise(r => setTimeout(r, 500 * (i+1))); }
+  }
+  $("addBtn").disabled = false; $("addBtn").textContent = "Tilføj";
+  showError("Ukendt mad (" + (err?.message || "fejl") + "). Indtast tallene selv.");
+  $("fbLabel").textContent = text.slice(0,50);
+  $("fbP").value = ""; $("fbK").value = "";
+  $("fallback").classList.remove("hide");
+}
+
+function showError(m) { $("error").textContent = m; $("error").classList.remove("hide"); }
+function hideFallback() { $("fallback").classList.add("hide"); $("error").classList.add("hide"); }
+
+function exportCsv() {
+  let rows = [["dato","tid","mad","protein_g","kcal","vaegt_kg"]];
+  Object.keys(data.days).sort().forEach(d => {
+    const dd = data.days[d];
+    dd.entries.forEach(e => rows.push([d, e.time, e.text, e.protein, e.kcal, ""]));
+    if (dd.weight) rows.push([d, "", "VÆGT", "", "", dd.weight]);
+  });
+  const csv = "\uFEFF" + rows.map(r => r.map(v => '"' + String(v).replace(/"/g,'""') + '"').join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = "protein-log.csv";
+  a.click();
+}
+
+/* ---------- render ---------- */
+function render() {
+  const d = day(selected);
+  const tp = d.entries.reduce((s,e) => s + e.protein, 0);
+  const tc = d.entries.reduce((s,e) => s + e.kcal, 0);
+
+  $("dateLabel").textContent = new Date(selected + "T00:00:00")
+    .toLocaleDateString("da-DK", { weekday:"long", day:"numeric", month:"long" });
+  $("toToday").classList.toggle("hide", selected === today());
+
+  $("pTotal").textContent = tp;
+  $("kTotal").textContent = tc;
+  $("pBar").style.width = Math.min(100, tp / PROTEIN_MAX * 100) + "%";
+  $("kBar").style.width = Math.min(100, tc / KCAL_MAX * 100) + "%";
+
+  const el = $("entries"); el.innerHTML = "";
+  d.entries.slice().reverse().forEach(e => {
+    const row = document.createElement("div"); row.className = "entry";
+    const left = document.createElement("div");
+    left.innerHTML = '<div style="font-size:14px"></div><div class="muted" style="font-size:12px"></div>';
+    left.children[0].textContent = e.text;
+    left.children[1].textContent = e.time;
+    const right = document.createElement("div");
+    right.style.cssText = "display:flex;align-items:center;gap:10px";
+    const nums = document.createElement("button");
+    nums.className = "linkish"; nums.textContent = e.protein + " g · " + e.kcal + " kcal";
+    nums.onclick = () => editEntry(e.id, row);
+    const del = document.createElement("button");
+    del.className = "del"; del.textContent = "slet";
+    del.onclick = () => { d.entries = d.entries.filter(x => x.id !== e.id); data.days[selected] = d; save(); render(); };
+    right.append(nums, del); row.append(left, right); el.append(row);
+  });
+
+  const wk = $("week"); wk.innerHTML = "";
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const dt = new Date(selected + "T00:00:00"); dt.setDate(dt.getDate() - i);
+    const k = iso(dt);
+    days.push({ k, p: (data.days[k]?.entries || []).reduce((s,e) => s + e.protein, 0),
+      lbl: dt.toLocaleDateString("da-DK", { weekday:"short" }).replace(".","") });
+  }
+  const max = Math.max(PROTEIN_MAX, ...days.map(x => x.p));
+  days.forEach(x => {
+    const col = document.createElement("div"); col.className = "col";
+    const slot = document.createElement("div"); slot.className = "slot";
+    const b = document.createElement("div");
+    b.className = "b" + (x.k === selected ? " on" : "");
+    b.style.height = Math.max(4, x.p / max * 70) + "px";
+    b.onclick = () => { selected = x.k; render(); };
+    slot.append(b);
+    const lb = document.createElement("div");
+    lb.className = "muted"; lb.style.cssText = "font-size:11px;margin-top:4px";
+    lb.textContent = x.lbl;
+    col.append(slot, lb); wk.append(col);
+  });
+
+  $("weightLabel").textContent = "Vægt i dag" + (d.weight ? " — " + d.weight + " kg logget" : "");
+}
+
+function editEntry(id, row) {
+  const d = day(selected);
+  const e = d.entries.find(x => x.id === id);
+  row.innerHTML = "";
+  row.style.display = "block";
+  const box = document.createElement("div");
+  box.innerHTML =
+    '<div style="font-size:14px;margin-bottom:8px"></div>' +
+    '<div class="row" style="margin-bottom:8px">' +
+      '<div style="flex:1"><label>protein (g)</label><input type="number" inputmode="numeric"></div>' +
+      '<div style="flex:1"><label>kcal</label><input type="number" inputmode="numeric"></div>' +
+    '</div><div class="row"></div>';
+  box.children[0].textContent = e.text;
+  const ins = box.querySelectorAll("input");
+  ins[0].value = e.protein; ins[1].value = e.kcal;
+  const gem = document.createElement("button"); gem.className = "btn"; gem.textContent = "Gem";
+  gem.onclick = () => { e.protein = Number(ins[0].value)||0; e.kcal = Number(ins[1].value)||0; save(); render(); };
+  const ann = document.createElement("button"); ann.className = "btn-ghost"; ann.textContent = "Annullér";
+  ann.onclick = render;
+  box.lastElementChild.append(gem, ann);
+  row.append(box);
+}
+
+/* ---------- init ---------- */
+load();
+if (!localStorage.getItem(KEYSTORE) && !localStorage.getItem("protein-skipped")) {
+  $("setup").classList.remove("hide");
+} else {
+  $("app").classList.remove("hide"); render();
+}
+
+$("saveKey").onclick = () => {
+  const v = $("keyInput").value.trim();
+  if (v) localStorage.setItem(KEYSTORE, v);
+  apiKey = v;
+  $("setup").classList.add("hide"); $("app").classList.remove("hide"); render();
+};
+$("skipKey").onclick = () => {
+  localStorage.setItem("protein-skipped", "1");
+  $("setup").classList.add("hide"); $("app").classList.remove("hide"); render();
+};
+$("addBtn").onclick = submitFood;
+$("foodInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); submitFood(); } });
+$("prevDay").onclick = () => { const d = new Date(selected + "T00:00:00"); d.setDate(d.getDate()-1); selected = iso(d); render(); };
+$("toToday").onclick = () => { selected = today(); render(); };
+$("menuBtn").onclick = () => $("menu").classList.toggle("hide");
+$("exportCsv").onclick = exportCsv;
+$("changeKey").onclick = () => {
+  localStorage.removeItem(KEYSTORE); localStorage.removeItem("protein-skipped");
+  $("app").classList.add("hide"); $("setup").classList.remove("hide");
+  $("keyInput").value = "";
+};
+$("fbSave").onclick = () => {
+  addEntry(selected, { label: $("fbLabel").textContent,
+    protein: Number($("fbP").value)||0, kcal: Number($("fbK").value)||0 });
+  $("foodInput").value = ""; hideFallback();
+};
+$("fbRetry").onclick = () => { hideFallback(); submitFood(); };
+$("fbCancel").onclick = hideFallback;
+$("saveWeight").onclick = () => {
+  const w = parseFloat($("weightInput").value.replace(",","."));
+  if (!w) return;
+  day(selected).weight = w; save(); $("weightInput").value = ""; render();
+};
+</script>
+</body>
+</html>
