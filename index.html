@@ -163,6 +163,16 @@
         <button class="btn-ghost" id="fbCancel">Annullér</button>
       </div>
     </div>
+    <div id="preview" class="card hide" style="margin-top:10px">
+      <div id="pvTitle" style="font-size:15px;margin-bottom:4px"></div>
+      <div id="pvNums" class="muted" style="font-size:14px;margin-bottom:8px"></div>
+      <div id="pvIng" class="muted" style="font-size:13px;line-height:1.5;margin-bottom:6px"></div>
+      <div id="pvAnt" class="muted" style="font-size:12px;line-height:1.4;margin-bottom:12px"></div>
+      <div class="row">
+        <button class="btn" id="pvOk">Tilføj</button>
+        <button class="btn-ghost" id="pvNo">Annullér</button>
+      </div>
+    </div>
     <div id="error" class="err hide"></div>
   </div>
 
@@ -186,7 +196,8 @@
 const STORE = "protein-log-v1", KEYSTORE = "protein-apikey", GOALSTORE = "protein-goals";
 const DEFAULT_GOALS = { pMin: 160, pMax: 170, kMin: 2800, kMax: 3000 };
 let goals = { ...DEFAULT_GOALS };
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL = "claude-sonnet-5-5";
+const CONFIRM_KCAL = 500; // måltider over dette vises til bekræftelse før de lægges til
 
 const $ = id => document.getElementById(id);
 const iso = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
@@ -244,6 +255,12 @@ const SYSTEM_PROMPT =
   '- "oksekød 12%", "mælk 1,5%" = fedtprocent; vælg kcal derefter.\n' +
   '- Står proteinindholdet for en drik eller shake, men også en væske ("på 350 ml minimælk"), ' +
   'så er det oplyste protein det samlede for hele drikken, inklusive mælken, medmindre andet fremgår.\n\n' +
+  'Tal uden enhed foran en vare er ANTAL STYKKER af varen, aldrig antal portioner, bakker eller pakker:\n' +
+  '- "3 chili cheese tops" = 3 enkelte stk. (hver ca. 25-30 g), ikke 3 portioner. Det samme gælder nuggets, ' +
+  'kiks, chips, slik, pølser, bacon-skiver og lignende småting.\n' +
+  '- Portion, menu, bakke eller pakke regnes kun, hvis brugeren skriver det ("portion", "menu", "bakke", "pose").\n' +
+  '- Ved burgere og fastfood: vælg en realistisk standardstørrelse for en enkelt enhed. Overestimér ikke. ' +
+  '"Cheeseburger med 2 bøffer" = én burger med to almindelige burgerbøffer, ikke en gourmetburger.\n\n' +
   'Mål og størrelser skal omregnes til vægt:\n' +
   '- Ø betyder diameter. Areal = π·(d/2)². Omkreds ÷ π = diameter.\n' +
   '- Tynd frossen pizza ca. 1,0-1,2 g/cm². Tyk bund ca. 1,5 g/cm².\n' +
@@ -346,14 +363,16 @@ async function submitFood() {
   }
 
   $("addBtn").disabled = true; $("addBtn").textContent = "…";
-  hideFallback();
+  hideFallback(); hidePreview();
   let err = null;
   for (let i = 0; i < 3; i++) {
     try {
       const r = await apiEstimate(text);
+      $("addBtn").disabled = false; $("addBtn").textContent = "Tilføj";
+      const t = totals({ v: 2, ingredienser: r.ingredienser });
+      if (t.kcal >= CONFIRM_KCAL) { showPreview(text, r, t); return; }
       addStructured(selected, text, r);
       $("foodInput").value = ""; hideFallback();
-      $("addBtn").disabled = false; $("addBtn").textContent = "Tilføj";
       return;
     } catch (e) { err = e; if (i < 2) await new Promise(x => setTimeout(x, 500 * (i+1))); }
   }
@@ -361,6 +380,17 @@ async function submitFood() {
   showError("Estimering fejlede (" + (err?.message || "fejl") + "). Indtast tallene selv.");
   openFallback(text);
 }
+
+let pending = null;
+function showPreview(text, r, t) {
+  pending = { text, r };
+  $("pvTitle").textContent = r.ret;
+  $("pvNums").textContent = t.protein + " g protein · " + t.kcal + " kcal";
+  $("pvIng").textContent = r.ingredienser.map(i => i.navn + " " + Math.round(i.gram) + " g").join(" · ");
+  $("pvAnt").textContent = r.antagelser;
+  $("preview").classList.remove("hide");
+}
+function hidePreview() { pending = null; $("preview").classList.add("hide"); }
 
 function openFallback(text) {
   $("fbLabel").textContent = text.slice(0,60);
@@ -554,6 +584,12 @@ $("fbSave").onclick = () => {
   addManual(selected, $("fbLabel").textContent, Number($("fbP").value)||0, Number($("fbK").value)||0);
   $("foodInput").value = ""; hideFallback();
 };
+$("pvOk").onclick = () => {
+  if (!pending) return;
+  addStructured(selected, pending.text, pending.r);
+  $("foodInput").value = ""; hidePreview();
+};
+$("pvNo").onclick = hidePreview; // input står stadig, så du kan rette og prøve igen
 $("fbRetry").onclick = () => { hideFallback(); submitFood(); };
 $("fbCancel").onclick = hideFallback;
 $("saveWeight").onclick = () => {
